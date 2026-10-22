@@ -1,12 +1,20 @@
 import { fetchCandles } from "../../features/chart/services";
 import type { Candle } from "../../features/chart/types";
 import type { AssetContext } from "../../features/market-summary/types";
+import { createOrderBookSimulator } from "../../features/order-book/order-book-simulator";
 import type { OrderBookSnapshot } from "../../features/order-book/types";
 import type { Trade } from "../../features/trades/types";
 import { hyperliquidWs } from "../../services/hyperliquid/websocket";
+import { createLatestBuffer } from "../../utils/createLatestBuffer";
 import { useMarketDataStore } from "./market-data-store";
 
 const CANDLES_INTERVAL = "1m";
+const ORDER_BOOK_PUBLISH_INTERVAL = 50; // 50ms
+const SIMULATOR_INTERVAL = 10; // 10ms
+
+const SIMULATE_HIGH_TRAFFIC =
+	import.meta.env.DEV && import.meta.env.VITE_SIMULATE_HIGH_TRAFFIC === "true";
+
 const isOrderBookSnapshot = (value: unknown): value is OrderBookSnapshot => {
 	if (typeof value !== "object" || value === null) return false;
 
@@ -79,6 +87,27 @@ export const startMarketData = (market: string) => {
 
 	store.setStatus("connecting");
 
+	let cancelled = false;
+	// Buffer order-book snapshots before publishing to Zustand.
+	// At 50 ms, the UI receives at most 20 updates per second.
+	const orderBookBuffer = createLatestBuffer<OrderBookSnapshot>((snapshot) => {
+		useMarketDataStore.getState().setOrderBook(market, snapshot);
+	}, ORDER_BOOK_PUBLISH_INTERVAL);
+
+	// let updates = 0;
+	// Generates synthetic order-book traffic for performance testing.
+	const orderBookSimulator = createOrderBookSimulator({
+		interval: SIMULATOR_INTERVAL,
+		onSnapshot: (snapshot) => {
+			// updates += 1;
+			orderBookBuffer.push(snapshot);
+		},
+	});
+
+	if (SIMULATE_HIGH_TRAFFIC) {
+		orderBookSimulator.start();
+	}
+
 	unsubscribers.push(
 		hyperliquidWs.onStatus((status) => {
 			useMarketDataStore.getState().setStatus(status);
@@ -87,9 +116,18 @@ export const startMarketData = (market: string) => {
 
 	unsubscribers.push(
 		hyperliquidWs.subscribe({ type: "l2Book", coin: market }, (data) => {
-			if (!isOrderBookSnapshot(data) || data.coin !== market) return;
+			if (!isOrderBookSnapshot(data) || data.coin !== market) {
+				return;
+			}
 
-			useMarketDataStore.getState().setOrderBook(market, data);
+			if (SIMULATE_HIGH_TRAFFIC) {
+				// Real snapshots provide the simulator's baseline.
+				orderBookSimulator.updateBaseline(data);
+				// console.log(updates);
+			} else {
+				// Normal mode: publish real data through the buffer.
+				orderBookBuffer.push(data);
+			}
 		}),
 	);
 
@@ -109,10 +147,19 @@ export const startMarketData = (market: string) => {
 
 	unsubscribers.push(
 		hyperliquidWs.subscribe(
-			{ type: "candle", coin: market, interval: CANDLES_INTERVAL },
+			{
+				type: "candle",
+				coin: market,
+				interval: CANDLES_INTERVAL,
+			},
 			(data) => {
-				if (!isCandle(data) || data.s !== market || data.i !== CANDLES_INTERVAL)
+				if (
+					!isCandle(data) ||
+					data.s !== market ||
+					data.i !== CANDLES_INTERVAL
+				) {
 					return;
+				}
 
 				useMarketDataStore.getState().updateCandle(market, data);
 			},
@@ -127,7 +174,9 @@ export const startMarketData = (market: string) => {
 
 				const message = data as Record<string, unknown>;
 
-				if (message.coin !== market || !isAssetContext(message.ctx)) return;
+				if (message.coin !== market || !isAssetContext(message.ctx)) {
+					return;
+				}
 
 				useMarketDataStore.getState().setAssetContext(market, {
 					coin: market,
@@ -137,16 +186,27 @@ export const startMarketData = (market: string) => {
 		),
 	);
 
-	let cancelled = false;
+	void fetchCandles(market, CANDLES_INTERVAL)
+		.then((candles) => {
+			if (cancelled) return;
 
-	void fetchCandles(market, CANDLES_INTERVAL).then((candles) => {
-		if (cancelled) return;
-
-		useMarketDataStore.getState().setCandles(market, candles.filter(isCandle));
-	});
+			useMarketDataStore
+				.getState()
+				.setCandles(market, candles.filter(isCandle));
+		})
+		.catch((error: unknown) => {
+			if (!cancelled) {
+				console.error("Failed to load historical candles:", error);
+			}
+		});
 
 	return () => {
 		cancelled = true;
+
+		// Stop synthetic updates and prevent buffered snapshots
+		// from being published after the market changes.
+		orderBookSimulator.stop();
+		orderBookBuffer.stop();
 
 		unsubscribers.forEach((unsubscribe) => {
 			unsubscribe();

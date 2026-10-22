@@ -25,6 +25,16 @@ npm install
 npm run dev
 ```
 
+# Performance and Stress Testing
+
+To simulate a high rate of messages in Order Books
+
+- Create `.env.local` file at root level and add `VITE_SIMULATE_HIGH_TRAFFIC=true/false`
+  <br>
+  This will enable/disabled:
+  - A 10ms simulator that generates ~100 synthetic updates/second for stress testing (increased/decreased via `src/app/store/market-data-controller` > `SIMULATOR_INTERVAL`)
+  - A 50ms buffer that publishes the latest snapshot at most 20 times/second. (increased/decreased via `src/app/store/market-data-controller` > `ORDER_BOOK_PUBLISH_INTERVAL`)
+
 # Building For Production
 
 To build this application for production:
