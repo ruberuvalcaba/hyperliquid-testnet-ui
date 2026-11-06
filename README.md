@@ -1,6 +1,8 @@
 # Hyperliquid Market Overview
 
-Frontend interface for the Hyperliquid testnet that displays live perpetuals market data.
+A real-time market dashboard for Hyperliquid testnet perpetuals, featuring BTC, ETH, and SOL market summaries, candlestick charts, a live order book with cumulative depth, and a recent trades feed.
+
+Built with React, TypeScript, Vite, and Tailwind CSS, the project uses Zustand for market state, native WebSockets for live updates, and TradingView Lightweight Charts for visualization. Its scope includes market switching, automatic reconnection and resubscription, buffered order-book updates, and a high-traffic simulator for exploring rendering performance.
 
 # Stack
 
@@ -30,8 +32,9 @@ npm run dev
 Use the **Simulate high traffic** switch to start or stop synthetic order-book updates immediately, without restarting the app. Simulation starts off. The selection is kept when switching markets and resets on page reload.
 
 Enabling simulation starts:
-  - A 10ms simulator that generates ~100 synthetic updates/second for stress testing (increased/decreased via `src/app/store/market-data-controller` > `SIMULATOR_INTERVAL`)
-  - Both modes use a 50ms buffer that publishes the latest snapshot at most 20 times/second. (increased/decreased via `src/app/store/market-data-controller` > `ORDER_BOOK_PUBLISH_INTERVAL`)
+
+- A 10ms simulator that generates ~100 synthetic updates/second for stress testing (increased/decreased via `src/app/store/market-data-controller` > `SIMULATOR_INTERVAL`)
+- Both modes use a 50ms buffer that publishes the latest snapshot at most 20 times/second. (increased/decreased via `src/app/store/market-data-controller` > `ORDER_BOOK_PUBLISH_INTERVAL`)
 
 # Building For Production
 
@@ -94,15 +97,3 @@ flowchart TD
 | `src/features/chart/`          | Candle data, chart adapter, and chart lifecycle                       |
 | `src/services/hyperliquid/`    | WebSocket client, subscription manager, REST client, and API schemas  |
 | `src/shared/`                  | Reusable UI components, formatting, numeric helpers, and common types |
-
-## Next Steps
-
-- **Validate market data with Zod:** Treat WebSocket messages and REST responses as untrusted input. Define schemas for incoming payloads and validate data at service boundaries before updating application state. Handle malformed or unexpected messages gracefully to protect the integrity of market data.
-
-- **Strengthen WebSocket reconnection resilience:** Implement explicit connection states, retry strategies with exponential backoff, and automatic subscription restoration. Handle stale data and intermittent network failures gracefully to ensure the application recovers reliably without requiring a page reload.
-
-- **Optimize real-time rendering performance:** Profile high-frequency order-book and trade updates to identify bottlenecks. Optimize state selectors, minimize unnecessary React re-renders, and batch UI updates where appropriate to maintain responsiveness under heavy market-data throughput.
-
-- **Expand automated test coverage:** Add unit and integration tests for payload validation, subscription lifecycle, reconnection behavior, store updates, and market switching. Cover edge cases such as malformed messages, interrupted connections, duplicate subscriptions, and stale data to prevent regressions as the application evolves.
-
-- **Introduce TanStack Query for server state:** Use TanStack Query to manage REST-based market data, including initial candle history and order-book snapshots where applicable. Leverage request caching, query invalidation, background refetching, and loading/error handling to complement the existing WebSocket-driven state.
