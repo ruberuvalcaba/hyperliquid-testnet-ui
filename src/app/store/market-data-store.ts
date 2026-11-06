@@ -7,6 +7,8 @@ import type { Trade } from "../../features/trades/types";
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 type MarketDataState = {
+	simulateHighTraffic: boolean;
+	setSimulateHighTraffic: (enabled: boolean) => void;
 	status: ConnectionStatus;
 	orderBooks: Record<string, OrderBookSnapshot | undefined>;
 	trades: Record<string, Trade[] | undefined>;
@@ -24,6 +26,8 @@ type MarketDataState = {
 const MAX_TRADES = 50;
 
 export const useMarketDataStore = create<MarketDataState>((set) => ({
+	simulateHighTraffic: false,
+	setSimulateHighTraffic: (enabled) => set({ simulateHighTraffic: enabled }),
 	// Stores live order books, trades, candles, and asset context keyed by market symbol for the UI.
 	status: "disconnected",
 	orderBooks: {},

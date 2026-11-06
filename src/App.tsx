@@ -14,6 +14,12 @@ type Market = (typeof MARKETS)[number];
 export default function App() {
 	const [market, setMarket] = useState<Market>("BTC");
 	const status = useMarketDataStore((state) => state.status);
+	const simulateHighTraffic = useMarketDataStore(
+		(state) => state.simulateHighTraffic,
+	);
+	const setSimulateHighTraffic = useMarketDataStore(
+		(state) => state.setSimulateHighTraffic,
+	);
 	const isConnected = status === "connected";
 
 	useEffect(() => {
@@ -69,6 +75,24 @@ export default function App() {
 					</div>
 				</div>
 				<div className="mb-6">
+					<label className="mb-6 flex w-fit cursor-pointer items-center gap-3 text-sm text-zinc-300">
+						<input
+							type="checkbox"
+							role="switch"
+							aria-checked={simulateHighTraffic}
+							checked={simulateHighTraffic}
+							onChange={(event) => setSimulateHighTraffic(event.target.checked)}
+							className="peer sr-only"
+						/>
+						<span
+							aria-hidden="true"
+							className="relative h-6 w-11 rounded-full bg-zinc-700 transition-colors after:absolute after:left-1 after:top-1 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-emerald-600 peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-zinc-950"
+						/>
+						<span>Simulate high traffic</span>
+						<span className="text-xs text-zinc-500">
+							{simulateHighTraffic ? "On · ~100 updates/s" : "Off"}
+						</span>
+					</label>
 					<MarketSummary market={market} />
 				</div>
 				<div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">

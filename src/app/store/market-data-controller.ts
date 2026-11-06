@@ -12,9 +12,6 @@ const CANDLES_INTERVAL = "1m";
 const ORDER_BOOK_PUBLISH_INTERVAL = 50; // 50ms
 const SIMULATOR_INTERVAL = 10; // 10ms
 
-const SIMULATE_HIGH_TRAFFIC =
-	import.meta.env.DEV && import.meta.env.VITE_SIMULATE_HIGH_TRAFFIC === "true";
-
 const isOrderBookSnapshot = (value: unknown): value is OrderBookSnapshot => {
 	if (typeof value !== "object" || value === null) return false;
 
@@ -88,6 +85,7 @@ export const startMarketData = (market: string) => {
 	store.setStatus("connecting");
 
 	let cancelled = false;
+	let latestRealSnapshot: OrderBookSnapshot | null = null;
 	// Buffer order-book snapshots before publishing to Zustand.
 	// At 50 ms, the UI receives at most 20 updates per second.
 	const orderBookBuffer = createLatestBuffer<OrderBookSnapshot>((snapshot) => {
@@ -104,9 +102,27 @@ export const startMarketData = (market: string) => {
 		},
 	});
 
-	if (SIMULATE_HIGH_TRAFFIC) {
-		orderBookSimulator.start();
-	}
+	const updateSimulation = (enabled: boolean) => {
+		orderBookSimulator.stop();
+		orderBookBuffer.stop();
+		if (enabled) {
+			if (latestRealSnapshot) {
+				orderBookSimulator.updateBaseline(latestRealSnapshot);
+			}
+			orderBookSimulator.start();
+		} else if (latestRealSnapshot) {
+			orderBookBuffer.push(latestRealSnapshot);
+		}
+	};
+
+	updateSimulation(store.simulateHighTraffic);
+	unsubscribers.push(
+		useMarketDataStore.subscribe((state, previous) => {
+			if (state.simulateHighTraffic !== previous.simulateHighTraffic) {
+				updateSimulation(state.simulateHighTraffic);
+			}
+		}),
+	);
 
 	unsubscribers.push(
 		hyperliquidWs.onStatus((status) => {
@@ -120,7 +136,8 @@ export const startMarketData = (market: string) => {
 				return;
 			}
 
-			if (SIMULATE_HIGH_TRAFFIC) {
+			latestRealSnapshot = data;
+			if (useMarketDataStore.getState().simulateHighTraffic) {
 				// Real snapshots provide the simulator's baseline.
 				orderBookSimulator.updateBaseline(data);
 				// console.log(updates);
